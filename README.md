@@ -21,6 +21,7 @@
     ```bash
     git clone https://github.com/Boon1013/DIG-Macro
     ```
+	*or download the .zip and extract it: https://github.com/Boon1013/DIG-Macro/archive/refs/heads/main.zip*
 	
 3. **Go inside the directory (DIG Macro).**
     
