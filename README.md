@@ -41,6 +41,10 @@
     ```bash
     py main.py
     ```
+	
+4.	**Start the macro:**
+	Press `F7` on your keyboard.
+
 ## How to Stop
   * Simply **close the "debug" window**.
   * Alternatively, you can press `Ctrl+C` in the terminal where the script is running.
@@ -57,3 +61,5 @@ You can tweak the script's behavior by modifying the settings at the top of the 
 |                                     | 
 | `WINDOW_NAME`                       | Title of the Debug Window.                                                                                          
 | `SHOW_DEBUG`                        | Set to `False` to disable the debug window for a slight performance gain (it will open an window with no image instead so you can easily stop the macro).
+|                                     | 
+| `TOGGLE_KEY`                        | The key that will be used to toggle the macro running (Default is `F7`).

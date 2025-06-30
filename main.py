@@ -1,4 +1,4 @@
-# Copyright 2025 mstudio45
+# Copyright 2025 mr.boon
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,13 +20,13 @@
 import os, sys, time, random, subprocess
 import platform, threading
 import requests, pymsgbox
-
 import numpy as np
 import cv2
 import mss
 import pynput
+from pynput import keyboard
 
-current_os = platform.system() # == "Windows"
+current_os = platform.system()
 if current_os == "Windows":
     import win32gui
 
@@ -35,38 +35,26 @@ class Config:
     CLICKABLE_WIDTH = 25
     CHECK_FOR_BLACK_SCREEN = True
     CLICK_COOLDOWN = 0.275
-    
-    # PATHFINDING (experimental) #
     PATHFINDING = True
-
-    # DEBUG WINDOW #
-    WINDOW_NAME = "DIG Macro by Mr. boon"
     SHOW_DEBUG = True
+    TOGGLE_KEY = keyboard.Key.f7  # Change this to another key if needed
+    BASE_WINDOW_NAME = "DIG Macro"
 
-###########################################################################################
-###########################################################################################
-###########################################################################################
-###########################################################################################
-###########################################################################################
-###########################################################################################
-###########################################################################################
-###########################################################################################
-
-# CODE VARIABLES
-current_version = "1.0.0" # DON'T CHANGE THIS
-bar_region = {'left': 520, 'top': 840, 'width': 885, 'height': 50} # DON'T CHANGE THIS (535, 755, 850, 125)
-
+# state variables #
+current_version = "1.1.0"
+bar_region = {'left': 520, 'top': 840, 'width': 885, 'height': 50}
 running = True
 can_click = False
 debug_img = None
-
 is_minigame_active = False
 is_minigame_active_timeout = None
 pathfinding_currently = False
+macro_enabled = False
+stop_after_current_dig = False
+dig_in_progess = False
 
-# CLICK FUNCTION
 movement_keys = ["w", "a", "s", "d"]
-opposite_movement_keys = { "w": "s",   "a": "d",    "s": "w",    "d": "a" }
+opposite_movement_keys = {"w": "s", "a": "d", "s": "w", "d": "a"}
 _pynput_mouse_controller = pynput.mouse.Controller()
 _pynput_keyboard_controller = pynput.keyboard.Controller()
 click = lambda: _pynput_mouse_controller.click(pynput.mouse.Button.left, 1)
@@ -76,16 +64,10 @@ def is_roblox_focused():
         if current_os == "Windows":
             title = win32gui.GetWindowText(win32gui.GetForegroundWindow())
             return "roblox" in title.lower()
-            
-        elif current_os == "Linux":
-            title = subprocess.Popen(["xprop", "-id", subprocess.Popen(["xprop", "-root", "_NET_ACTIVE_WINDOW"], stdout=subprocess.PIPE).communicate()[0].strip().split()[-1], "WM_NAME"], stdout=subprocess.PIPE, stderr=subprocess.PIPE).communicate()[0].strip().split('"', 1)[-1][:-1]
-            return "sober" in title.lower()
-            
     except Exception as e:
         print(f"Error checking focus: {e}")
-
     return False
-
+    
 # MAIN BAR HANDLER
 black_pixel = np.array([0, 0, 0, 255])
 # player_bar_blur_margin = 7
@@ -259,12 +241,57 @@ class HandleDebugWindowThread(threading.Thread):
         self._stop_event.set()
         cv2.destroyWindow(self.window_name)
 
+# Keyboard toggle
+
+def on_press(key):
+    global macro_enabled, stop_after_current_dig
+    try:
+        if key == Config.TOGGLE_KEY:
+            if macro_enabled:
+                print("[F7] Toggle pressed. Will stop after current dig.")
+                stop_after_current_dig = True
+            else:
+                print("[F7] Toggle pressed. Starting macro.")
+                macro_enabled = True
+                stop_after_current_dig = False
+    except Exception as e:
+        print(f"Keyboard listener error: {e}")
+
+# THREADS
+
+class HandleDebugWindowThread(threading.Thread):
+    def __init__(self, enabled, window_name):
+        super().__init__()
+        self.enabled = enabled
+        self.window_name = window_name
+        self._stop_event = threading.Event()
+        self.daemon = True
+
+    def run(self):
+        global running, debug_img
+        cv2.namedWindow(self.window_name, cv2.WINDOW_AUTOSIZE)
+        time.sleep(0.01)
+        while not self._stop_event.is_set():
+            if cv2.getWindowProperty(self.window_name, cv2.WND_PROP_VISIBLE) < 1:
+                running = False
+                break
+            if self.enabled:
+                status = "[RUNNING]" if macro_enabled else "[STOPPED]"
+                cv2.setWindowTitle(self.window_name, f"{Config.BASE_WINDOW_NAME} {status}")
+                if current_os == "Windows":
+                    cv2.setWindowProperty(self.window_name, cv2.WND_PROP_TOPMOST, 1)
+                if debug_img is not None:
+                    cv2.imshow(self.window_name, debug_img)
+                cv2.waitKey(1)
+
+    def stop(self):
+        self._stop_event.set()
+        cv2.destroyWindow(self.window_name)
+
 class PlayerBarThread(threading.Thread):
-    # used to find the bar and dirt part #
     def __init__(self, target_region):
         super().__init__()
         self.target_region = target_region
-
         self._stop_event = threading.Event()
         self.daemon = True
 
@@ -272,7 +299,6 @@ class PlayerBarThread(threading.Thread):
         global can_click, debug_img
         sct = mss.mss()
         event = threading.Event()
-
         while not self._stop_event.is_set():
             try:
                 can_click, debug_img = find_bar(self.target_region, sct=sct)
@@ -288,51 +314,32 @@ class PathfindingThread(threading.Thread):
         super().__init__()
         self.key_history = []
         self.replaying_reverse = False
-
         self._stop_event = threading.Event()
         self.daemon = True
-    
+
     def run(self):
         global pathfinding_currently, is_minigame_active
-
         while not self._stop_event.is_set():
-            if Config.PATHFINDING and not pathfinding_currently and not is_minigame_active:
+            if Config.PATHFINDING and not pathfinding_currently and not is_minigame_active and macro_enabled:
                 if is_roblox_focused():
                     pathfinding_currently = True
-
-                    # get random key (or replay events to get back at old pos) and duration #
-                    key = "w"
-                    duration = 0.6
-
-                    if self.replaying_reverse and len(self.key_history) >= 1:
-                        key, duration = self.key_history.pop()
-                        key = opposite_movement_keys[key]
-                    else:
-                        key = random.choice(movement_keys)
-                        duration = random.uniform(0.3, 0.6)
-                        self.replaying_reverse = False
-
-                        # add to key history #
-                        self.key_history.append((key, duration))
-                        if len(self.key_history) >= 5:
-                            self.replaying_reverse = True
-
-                    # press the key #
-                    _pynput_keyboard_controller.press(key)
-                    time.sleep(duration)
-                    _pynput_keyboard_controller.release(key)
-                    time.sleep(0.1)
-
-                    # click after walking away and if minigame is not active (to away missclicks) #
-                    if is_minigame_active == False:
-                        click()
-
-                    time.sleep(0.1)
-                    pathfinding_currently = False
-            time.sleep(2.5)
+                    try:
+                        key, duration = random.choice(movement_keys), random.uniform(0.3, 0.6)
+                        _pynput_keyboard_controller.press(key)
+                        time.sleep(duration)
+                        _pynput_keyboard_controller.release(key)
+                        time.sleep(0.1)
+                        if not is_minigame_active:
+                            click()
+                        time.sleep(0.1)
+                    finally:
+                        pathfinding_currently = False
+            time.sleep(0.5)
 
     def stop(self):
         self._stop_event.set()
+
+# UTIL
 
 def stopThread(thread_name, thead):
     if thead and thead.is_alive():
@@ -341,54 +348,60 @@ def stopThread(thread_name, thead):
         if thead.is_alive():
             print(f"Warning: {thread_name} did not stop gracefully.")
 
+# MAIN
 if __name__ == "__main__":
-    # UPDATE CHECK #
     try:
         req = requests.get("https://raw.githubusercontent.com/Boon1013/DIG-Macro/refs/heads/storage/VERSION")
         version = req.text.replace("\n", "").replace("\r", "")
         if version != current_version:
-            pymsgbox.alert(f"A new version is avalaible at https://github.com/Boon1013/DIG-Macro!\n{current_version} -> {version}")
+            pymsgbox.alert(f"A new version is available at https://github.com/Boon1013/DIG-Macro!\n{current_version} -> {version}")
     except Exception as e:
         pymsgbox.alert(f"Failed to check for updates: {str(e)}")
 
     last_click_state = False
 
-    # BAR DETECTOR
     player_thread = PlayerBarThread(bar_region)
     player_thread.start()
 
-    # PATHFINDING
     pathfinding_thread = PathfindingThread()
     pathfinding_thread.start()
 
-    # DEBUG WINDOW (Keep Above)
-    debug_window_thread = HandleDebugWindowThread(Config.SHOW_DEBUG, Config.WINDOW_NAME)
+    debug_window_thread = HandleDebugWindowThread(Config.SHOW_DEBUG, Config.BASE_WINDOW_NAME)
     debug_window_thread.start()
 
-    # CLICK HANDLER
+    listener = keyboard.Listener(on_press=on_press)
+    listener.start()
+
     try:
         while running:
-            if not pathfinding_currently:
+            if macro_enabled and not pathfinding_currently:
                 if can_click and not last_click_state:
                     last_click_state = True
+                    dig_in_progress = True
                     click()
                     time.sleep(Config.CLICK_COOLDOWN)
+                    dig_in_progress = False
+                    
+                    if stop_after_current_dig and not dig_in_progress:
+                        print("[Macro] Stopping after current dig.")
+                        macro_enabled = False
+                        stop_after_current_dig = False
                 else:
                     last_click_state = False
-            time.sleep(0)
+            else:
+                last_click_state = False
+            time.sleep(0.01)
 
     except KeyboardInterrupt:
         print("Closing...")
-    
     except Exception as e:
         print(e)
-
     finally:
         print("Stopping threads and cleaning up...")
         stopThread("pathfinding_thread", pathfinding_thread)
         stopThread("player_thread", player_thread)
         stopThread("debug_window_thread", debug_window_thread)
-
+        listener.stop()
         cv2.destroyAllWindows()
         print("Exited.")
         sys.exit(1)
