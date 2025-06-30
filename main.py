@@ -52,7 +52,6 @@ is_minigame_active_timeout = None
 pathfinding_currently = False
 macro_enabled = False
 stop_after_current_dig = False
-dig_in_progess = False
 
 movement_keys = ["w", "a", "s", "d"]
 opposite_movement_keys = {"w": "s", "a": "d", "s": "w", "d": "a"}
@@ -383,12 +382,10 @@ if __name__ == "__main__":
             if macro_enabled and not pathfinding_currently:
                 if can_click and not last_click_state:
                     last_click_state = True
-                    dig_in_progress = True
                     click()
                     time.sleep(Config.CLICK_COOLDOWN)
-                    dig_in_progress = False
                     
-                    if stop_after_current_dig and not dig_in_progress:
+                    if stop_after_current_dig and not is_minigame_active:
                         print("[Macro] Stopping after current dig.")
                         macro_enabled = False
                         stop_after_current_dig = False
