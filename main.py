@@ -24,6 +24,7 @@ import numpy as np
 import cv2
 import mss
 import pynput
+import ctypes
 from pynput import keyboard
 
 current_os = platform.system()
@@ -296,6 +297,11 @@ class PlayerBarThread(threading.Thread):
         self.daemon = True
 
     def run(self):
+        # Windows priority boost
+        if sys.platform.startswith("win"):
+            handle = ctypes.windll.kernel32.GetCurrentThread()
+            priority = 15  # REALTIME_PRIORITY_CLASS or HIGH_PRIORITY_CLASS
+            ctypes.windll.kernel32.SetThreadPriority(handle, priority)
         global can_click, debug_img
         sct = mss.mss()
         event = threading.Event()

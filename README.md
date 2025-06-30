@@ -43,7 +43,7 @@
     ```
 	
 4.	**Start the macro:**
-	Press `F7` on your keyboard.
+	* Press `F7` on your keyboard.
 
 ## How to Stop
   * Simply **close the "debug" window**.
