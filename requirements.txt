@@ -1,0 +1,7 @@
+opencv-python
+numpy
+pynput
+mss
+requests
+pymsgbox
+pywin32; sys_platform == "win32"
