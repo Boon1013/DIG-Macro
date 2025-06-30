@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-# Original repository: https://github.com/mstudio45/digmacro
+# Original repository: https://github.com/Boon1013/DIG-Macro
 #
 # This file may have been modified from its original version.
 
