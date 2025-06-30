@@ -37,7 +37,7 @@ class Config:
     CLICK_COOLDOWN = 0.275
     
     # PATHFINDING (experimental) #
-    PATHFINDING = False
+    PATHFINDING = True
 
     # DEBUG WINDOW #
     WINDOW_NAME = "DIG Macro by Mr. boon"
@@ -319,9 +319,7 @@ class PathfindingThread(threading.Thread):
 
                     # press the key #
                     _pynput_keyboard_controller.press(key)
-                    print(key)
                     time.sleep(duration)
-                    print(key)
                     _pynput_keyboard_controller.release(key)
                     time.sleep(0.1)
 
